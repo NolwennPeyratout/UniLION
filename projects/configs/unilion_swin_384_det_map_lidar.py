@@ -2,6 +2,7 @@ _base_ = './unilion_swin_384_det_map.py'
 
 from projects.configs.lidar_only_utils import make_lidar_only_pipeline
 from projects.configs.unilion_swin_384_det_map import (
+    data_basic_config,
     test_pipeline as base_test_pipeline,
     train_pipeline as base_train_pipeline,
 )
@@ -26,25 +27,32 @@ eval_config = dict(
     pipeline=test_pipeline,
 )
 
+# CBGSDataset only builds cfg['dataset']: the pipeline must be set inside it.
 data = dict(
+    samples_per_gpu=2,
+    workers_per_gpu=4,
     train=dict(
-        data_root=data_root,
-        ann_file=data_root + 'nuscenes_infos_train.pkl',
-        pipeline=train_pipeline,
-    ),
+        type='CBGSDataset',
+        dataset=dict(
+            **data_basic_config,
+            ann_file=data_root + 'nuscenes_infos_train.pkl',
+            load_interval=1,
+            pipeline=train_pipeline,
+            test_mode=False)),
     val=dict(
-        data_root=data_root,
+        **data_basic_config,
         ann_file=data_root + 'nuscenes_infos_val.pkl',
+        load_interval=1,
         pipeline=test_pipeline,
-        eval_config=eval_config,
-    ),
+        test_mode=True,
+        eval_config=eval_config),
     test=dict(
-        data_root=data_root,
+        **data_basic_config,
         ann_file=data_root + 'nuscenes_infos_val.pkl',
+        load_interval=1,
         pipeline=test_pipeline,
-        eval_config=eval_config,
-    ),
-)
+        test_mode=True,
+        eval_config=eval_config))
 
 load_from = None
 resume_from = None

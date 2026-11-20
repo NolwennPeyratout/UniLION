@@ -561,8 +561,10 @@ class UniLION(BaseDetector):
 
         return losses
 
-    def forward_test(self, points, img, **data):
-        if isinstance(img, list):
+    def forward_test(self, points, img=None, **data):
+        # MultiScaleFlipAug3D wraps every key in a per-aug list; detect it on
+        # points since img is absent in lidar-only mode.
+        if isinstance(points[0], list):
             return self.aug_test(points, img, **data)
         else:
             return self.simple_test(points, img, **data)
@@ -639,12 +641,12 @@ class UniLION(BaseDetector):
 
         return res_list
 
-    def aug_test(self, points, img, **data):
+    def aug_test(self, points, img=None, **data):
         # fake test time augmentation
         for key in data.keys():
             if isinstance(data[key], list):
                 data[key] = data[key][0]
-        return self.simple_test(points[0], img[0], **data)
+        return self.simple_test(points[0], img[0] if img is not None else None, **data)
 
     # def aug_test(self, points, img, **data):
     #     aug_bboxes = list()

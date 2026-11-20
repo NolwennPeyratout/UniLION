@@ -21,6 +21,18 @@ from torch.utils.data import DataLoader, Sampler
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from projects.configs.lidar_only_utils import make_lidar_only_pipeline  # noqa: E402
+
+# Same model overrides as the *_lidar.py configs.
+LIDAR_ONLY_MODEL_OVERRIDES = dict(
+    fusion=False,
+    with_depth_loss=False,
+    img_backbone=None,
+    img_neck=None,
+    img_map2bev=None,
+    use_grid_mask=False,
+)
+
 
 class SceneOrderedSampler(Sampler):
     """Keep each scene contiguous and chronological for temporal inference."""
@@ -45,20 +57,28 @@ class SceneOrderedSampler(Sampler):
 class FeatureOnlyModel(nn.Module):
     """Run UniLION's feature extractor without executing task heads."""
 
-    def __init__(self, detector):
+    def __init__(self, detector, use_img):
         super().__init__()
         self.detector = detector
+        self.use_img = use_img
 
-    def forward(self, points, img, **data):
+    def forward(self, points, img=None, **data):
         data.pop("return_loss", None)
         data.pop("rescale", None)
-        if isinstance(img, list):
+        # MultiScaleFlipAug3D wraps every key in a per-aug list.
+        if isinstance(points[0], list):
             points = points[0]
-            img = img[0]
+            img = img[0] if img is not None else None
             data = {
                 key: value[0] if isinstance(value, list) else value
                 for key, value in data.items()
             }
+        if not self.use_img:
+            img = None
+        elif img is None:
+            raise RuntimeError(
+                "Fusion mode needs 'img' in the test pipeline Collect3D keys."
+            )
         return self.detector.extract_feat(points, img, **data)[0]
 
 
@@ -78,6 +98,14 @@ def parse_args():
         "--val-output-dir",
         required=True,
         help="Directory for val features and manifest",
+    )
+    parser.add_argument(
+        "--modality",
+        choices=("auto", "lidar", "fusion"),
+        default="auto",
+        help="auto: fusion if the config has an img_backbone, else lidar. "
+        "lidar: drop the image branch and image pipeline steps. "
+        "fusion: feed images (config must define the image branch).",
     )
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--gpu-id", type=int, default=0)
@@ -105,14 +133,37 @@ def import_config_plugins(cfg):
         importlib.import_module(plugin_module.strip("/").replace("/", "."))
 
 
-def make_dataset_loader(cfg, split, data_root, workers):
+def resolve_modality(cfg, modality):
+    has_img_branch = cfg.model.get("img_backbone") is not None
+    if modality == "auto":
+        modality = "fusion" if has_img_branch else "lidar"
+    if modality == "fusion" and not has_img_branch:
+        raise ValueError("--modality fusion requires a config with img_backbone.")
+    if modality == "lidar" and has_img_branch:
+        print(
+            "WARNING: lidar-only extraction from a fusion config; the image "
+            "branch is disabled and its checkpoint weights are ignored."
+        )
+        cfg.model.update(LIDAR_ONLY_MODEL_OVERRIDES)
+    return modality
+
+
+def make_dataset_loader(cfg, split, data_root, workers, modality):
     dataset_cfg = copy.deepcopy(cfg.data.test)
     dataset_cfg.test_mode = True
-    dataset_cfg.ann_file = cfg.data[split].ann_file
+    split_cfg = cfg.data[split]
+    # Unwrap dataset wrappers (e.g. CBGSDataset for train).
+    while "dataset" in split_cfg:
+        split_cfg = split_cfg.dataset
+    dataset_cfg.ann_file = split_cfg.ann_file
     if data_root:
         dataset_cfg.data_root = data_root
         dataset_cfg.ann_file = os.path.join(
             data_root, f"nuscenes_infos_{split}.pkl"
+        )
+    if modality == "lidar":
+        dataset_cfg.pipeline = make_lidar_only_pipeline(
+            dataset_cfg.pipeline, dataset_cfg.data_root
         )
 
     dataset = build_dataset(dataset_cfg)
@@ -252,6 +303,8 @@ def main():
     cfg = Config.fromfile(args.config)
     import_config_plugins(cfg)
     print(f"Loaded config from {args.config}")
+    modality = resolve_modality(cfg, args.modality)
+    print(f"Modality: {modality}")
 
     print("Setting model configuration...")
     cfg.model.pretrained = None
@@ -265,7 +318,7 @@ def main():
     model.eval()
 
     feature_model = MMDataParallel(
-        FeatureOnlyModel(model).cuda(args.gpu_id),
+        FeatureOnlyModel(model, use_img=modality == "fusion").cuda(args.gpu_id),
         device_ids=[args.gpu_id],
     )
 
@@ -274,7 +327,7 @@ def main():
         ("val", args.val_output_dir),
     ):
         dataset, data_loader = make_dataset_loader(
-            cfg, split, args.data_root, args.workers
+            cfg, split, args.data_root, args.workers, modality
         )
         export_split(
             feature_model,
