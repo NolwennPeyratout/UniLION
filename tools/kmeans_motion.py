@@ -41,7 +41,7 @@ def lidar2agent(trajs_offset, boxes):
 K = 6
 DIS_THRESH = 55
 
-fp = 'data/nuscenes/nuscenes_infos_train.pkl'
+fp = '/home/renault/repo/dataset/nuscenes/nuscenes_infos_train.pkl'
 data = mmcv.load(fp)
 data_infos = list(sorted(data["infos"], key=lambda e: e["timestamp"]))
 intention = dict()
@@ -94,8 +94,8 @@ for i in range(len(CLASSES)):
     clusters.append(cluster)
     for j in range(K):
         plt.scatter(cluster[j, :, 0], cluster[j, :,1])
-    plt.savefig(f'/data/zliu/vis/motion_intention_{CLASSES[i]}_{K}', bbox_inches='tight')
+    plt.savefig(f'/home/renault/repo/dataset/nuscenes/motion_intention_{CLASSES[i]}_{K}', bbox_inches='tight')
     plt.close()
 
 clusters = np.stack(clusters, axis=0)
-np.save(f'data/nuscenes/kmeans_motion_{K}.npy', clusters)
+np.save(f'/home/renault/repo/dataset/nuscenes/kmeans_motion_{K}.npy', clusters)

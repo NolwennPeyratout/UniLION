@@ -193,6 +193,79 @@ Besides, you can use our released model ([UniLION model](https://drive.google.co
 tools/dist_test.sh projects/projects/configs/unilion_swin_384_seq_e2e.py 8 <CKPT> --eval mAP
 ```
 
+### Export BEV features without training
+
+Download the released UniLION checkpoint and prepare the nuScenes train/val data
+as described above. Then export the fused BEV feature map for each sample; the
+script uses the test pipeline for both splits, runs in evaluation mode, and
+does not perform training or execute the task heads.
+
+In the `unilion` Conda environment, point CUDA to that environment before
+running (adjust the Python site-packages path if using a different Python
+version):
+
+```shell script
+conda activate unilion
+export CUDA_HOME="$CONDA_PREFIX"
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib/python3.9/site-packages/nvidia/nvjitlink/lib:$LD_LIBRARY_PATH"
+```
+
+```shell script
+python tools/extract_bev_features.py \
+    projects/configs/unilion_swin_384_seq_e2e.py \
+    /path/to/unilion_checkpoint.pth \
+    --data-root /path/DrivePI_Data/nuscenes \
+    --train-output-dir /path/DrivePI_Data/unilion_bev_feats_train \
+    --val-output-dir /path/DrivePI_Data/unilion_bev_feats_val \
+    --dtype float16
+```
+
+Each output directory contains one `<sample_token>.pt` file per sample and a
+`manifest.jsonl` index. Each `.pt` file contains a `feature` tensor in `C,H,W`
+layout and metadata for its nuScenes sample token, scene, timestamp, BEV
+coordinate bounds, and dtype. The default `float16` output reduces storage;
+use `--dtype float32` if the downstream project requires full precision. The
+checkpoint must be a complete UniLION model checkpoint; no training command is
+needed.
+
+The vendored Mamba implementation requires the `causal-conv1d` 1.4.0 CUDA
+extension API. The v1.1.1 extension has an incompatible function signature.
+Install the matching Git tag from the cloned repository before extraction:
+
+```shell script
+cd /path/to/causal-conv1d
+git fetch --tags
+git checkout v1.4.0
+CAUSAL_CONV1D_FORCE_BUILD=TRUE pip install --no-build-isolation --force-reinstall .
+python -c 'import causal_conv1d_cuda; from importlib.metadata import version; print(version("causal-conv1d"))'
+```
+
+### Train UniLION with LiDAR only
+
+These are LiDAR-only versions of the three stages above. Run them in order,
+using the same eight-GPU setup assumed by the original configs:
+
+```shell script
+# Stage 1: detection and map
+tools/dist_train.sh projects/configs/unilion_swin_384_det_map_lidar.py 8 \
+    --work-dir work_dirs/unilion_swin_384_det_map_lidar
+
+# Stage 2: sequential perception (loads stage 1's epoch_12.pth)
+tools/dist_train.sh projects/configs/unilion_swin_384_seq_perception_lidar.py 8 \
+    --work-dir work_dirs/unilion_swin_384_seq_perception_lidar
+
+# Stage 3: end-to-end motion and planning (loads stage 2's iter_42192.pth)
+tools/dist_train.sh projects/configs/unilion_swin_384_seq_e2e_lidar.py 8 \
+    --work-dir work_dirs/unilion_swin_384_seq_e2e_lidar
+```
+
+The configs expect prepared nuScenes files under `../dataset/nuscenes/`; edit
+`data_root` in each config if needed. Camera feature extraction and image
+loading are disabled. Camera calibration metadata is retained only for the
+existing LiDAR-to-ego coordinate transform. The standalone
+`unilion_swin_384_det_lidar.py` config is a single-stage detection-only option,
+not stage 1 of this three-stage recipe.
+
 ## TODO
 - [x] Release the paper.
 - [x] Release the code of UniLION.

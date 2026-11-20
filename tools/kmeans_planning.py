@@ -9,9 +9,9 @@ from sklearn.cluster import KMeans
 import mmcv
 
 
-K = 4096
+K = 6
 
-fp = 'data/nuscenes/nuscenes_infos_train.pkl'
+fp = '/home/renault/repo/dataset/nuscenes/nuscenes_infos_train.pkl'
 data = mmcv.load(fp)
 data_infos = list(sorted(data["infos"], key=lambda e: e["timestamp"]))
 navi_trajs = [[], [], []]
@@ -50,4 +50,4 @@ for j in range(K):
 # plt.close()
 
 clusters = np.stack(clusters, axis=0)
-np.save(f'data/nuscenes/kmeans_planning_{K}.npy', clusters)
+np.save(f'/home/renault/repo/dataset/nuscenes/kmeans_planning_{K}.npy', clusters)

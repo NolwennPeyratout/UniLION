@@ -404,7 +404,7 @@ class UniLION(BaseDetector):
         x = self.pts_neck(x)
         return x
 
-    def forward(self, points, img, **data):
+    def forward(self, points, img=None, **data):
         if self.training:
             return self.forward_train(points, img, **data)
         else:

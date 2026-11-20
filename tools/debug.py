@@ -12,7 +12,7 @@ if __name__ == "__main__":
     output_dir = '/data/jhhou/disk/temp'
     det3d_eval_version="detection_cvpr_2019"
     version = "v1.0-trainval"
-    data_root = 'data/nuscenes/'
+    data_root = '/home/renault/repo/dataset/nuscenes/'
     det3d_eval_configs = det_configs(det3d_eval_version)
     det3d_eval_configs.class_names = list(det3d_eval_configs.class_range.keys())
 

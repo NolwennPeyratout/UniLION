@@ -257,7 +257,7 @@ if __name__ == "__main__":
     out_size_factor = 2
 
     dataset_type = 'NuScenes3DDataset'
-    data_root = 'data/nuscenes/'
+    data_root = '/home/renault/repo/dataset/nuscenes/'
     input_modality = dict(
         use_lidar=True,
         use_camera=True,

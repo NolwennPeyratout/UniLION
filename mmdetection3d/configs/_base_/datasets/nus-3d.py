@@ -7,7 +7,7 @@ class_names = [
     'motorcycle', 'pedestrian', 'traffic_cone', 'barrier'
 ]
 dataset_type = 'NuScenesDataset'
-data_root = 'data/nuscenes/'
+data_root = '/home/renault/repo/dataset/nuscenes/'
 # Input modality for nuScenes dataset, this is consistent with the submission
 # format which requires the information in input_modality.
 input_modality = dict(
@@ -23,8 +23,8 @@ file_client_args = dict(backend='disk')
 # file_client_args = dict(
 #     backend='petrel',
 #     path_mapping=dict({
-#         './data/nuscenes/': 's3://nuscenes/nuscenes/',
-#         'data/nuscenes/': 's3://nuscenes/nuscenes/'
+#         './/home/renault/repo/dataset/nuscenes/': 's3://nuscenes/nuscenes/',
+#         '/home/renault/repo/dataset/nuscenes/': 's3://nuscenes/nuscenes/'
 #     }))
 train_pipeline = [
     dict(
