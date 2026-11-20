@@ -259,7 +259,7 @@ tools/dist_train.sh projects/configs/unilion_swin_384_seq_e2e_lidar.py 8 \
     --work-dir work_dirs/unilion_swin_384_seq_e2e_lidar
 ```
 
-The configs expect prepared nuScenes files under `../dataset/nuscenes/`; edit
+The configs expect prepared nuScenes files under `/home/renault/repo/dataset/nuscenes/`; edit
 `data_root` in each config if needed. Camera feature extraction and image
 loading are disabled. Camera calibration metadata is retained only for the
 existing LiDAR-to-ego coordinate transform. The standalone

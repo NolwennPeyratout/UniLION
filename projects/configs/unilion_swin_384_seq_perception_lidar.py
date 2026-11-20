@@ -7,7 +7,7 @@ from projects.configs.unilion_swin_384_seq_perception import (
 )
 
 
-data_root = '../dataset/nuscenes/'
+data_root = '/home/renault/repo/dataset/nuscenes/'
 train_pipeline = make_lidar_only_pipeline(base_train_pipeline, data_root)
 test_pipeline = make_lidar_only_pipeline(base_test_pipeline, data_root)
 
