@@ -1,6 +1,6 @@
 _base_ = './unilion_swin_384_det.py'
 
-data_root = '../dataset/nuscenes/'
+data_root = '/home/renault/repo/dataset/nuscenes/'
 input_modality = dict(
     use_lidar=True,
     use_camera=True,

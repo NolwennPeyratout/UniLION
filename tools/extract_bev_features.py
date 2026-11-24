@@ -7,6 +7,7 @@ import sys
 from functools import partial
 from pathlib import Path
 
+import numpy as np
 import torch
 from mmcv import Config
 from mmcv.parallel import DataContainer, MMDataParallel, collate
@@ -116,6 +117,12 @@ def parse_args():
         help="Saved feature dtype; float16 reduces disk usage",
     )
     parser.add_argument(
+        "--no-compress",
+        action="store_true",
+        help="Use np.savez instead of np.savez_compressed (~3x larger files, "
+        "faster write)",
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Overwrite existing per-sample features and manifests",
@@ -191,8 +198,20 @@ def unwrap_single_meta(value):
     return value
 
 
+def save_npz(feature_path, feature, compress):
+    """Save as DrivePI expects: np.load(path)['data'] of shape (1, C, H, W)."""
+    tmp_path = feature_path.with_name(feature_path.name + ".tmp")
+    save = np.savez_compressed if compress else np.savez
+    # Write through a file object so numpy does not append '.npz' to the tmp
+    # name, then rename so an interrupted run never leaves a truncated .npz.
+    with tmp_path.open("wb") as file:
+        save(file, data=feature.unsqueeze(0).numpy())
+    os.replace(tmp_path, feature_path)
+
+
 def export_split(
-    model, cfg, split, dataset, data_loader, output_dir, dtype, overwrite
+    model, cfg, split, dataset, data_loader, output_dir, dtype, overwrite,
+    compress,
 ):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -240,45 +259,39 @@ def export_split(
             ).contiguous()
             sample_token = meta["token"]
             scene_token = meta["scene_token"]
-            feature_name = f"{sample_token}.pt"
+            feature_name = f"{sample_token}.npz"
             feature_path = output_dir / feature_name
             if feature_path.exists() and not overwrite:
                 raise FileExistsError(
                     f"{feature_path} already exists; pass --overwrite to replace it."
                 )
 
-            height, width = feature.shape[-2:]
-            metadata = {
-                "schema": "unilion_bev_feature_v1",
-                "split": split,
-                "sample_token": sample_token,
-                "scene_token": scene_token,
-                "timestamp": float(meta["timestamp"]),
-                "layout": "C,H,W",
-                "dtype": dtype,
-                "coordinate_frame": "current_ego",
-                "bev_xy_bounds_m": [
-                    [float(x_min), float(x_max)],
-                    [float(y_min), float(y_max)],
-                ],
-                "meters_per_cell_xy": [
-                    float(x_max - x_min) / width,
-                    float(y_max - y_min) / height,
-                ],
-                "shape": list(feature.shape),
-                "feature": feature,
-            }
-            torch.save(metadata, feature_path)
+            save_npz(feature_path, feature, compress)
 
+            # The .npz only holds 'data'; per-sample metadata lives here.
+            height, width = feature.shape[-2:]
             manifest.write(
                 json.dumps(
                     {
+                        "schema": "unilion_bev_feature_npz_v1",
+                        "split": split,
                         "sample_token": sample_token,
                         "scene_token": scene_token,
                         "timestamp": float(meta["timestamp"]),
                         "file": feature_name,
-                        "shape": list(feature.shape),
+                        "npz_key": "data",
+                        "layout": "1,C,H,W",
+                        "shape": [1] + list(feature.shape),
                         "dtype": dtype,
+                        "coordinate_frame": "current_ego",
+                        "bev_xy_bounds_m": [
+                            [float(x_min), float(x_max)],
+                            [float(y_min), float(y_max)],
+                        ],
+                        "meters_per_cell_xy": [
+                            float(x_max - x_min) / width,
+                            float(y_max - y_min) / height,
+                        ],
                     }
                 )
                 + "\n"
@@ -338,6 +351,7 @@ def main():
             output_dir,
             args.dtype,
             args.overwrite,
+            not args.no_compress,
         )
 
 

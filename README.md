@@ -212,21 +212,34 @@ export LD_LIBRARY_PATH="$CONDA_PREFIX/lib/python3.9/site-packages/nvidia/nvjitli
 
 ```shell script
 python tools/extract_bev_features.py \
-    projects/configs/unilion_swin_384_seq_e2e.py \
-    /path/to/unilion_checkpoint.pth \
-    --data-root /path/DrivePI_Data/nuscenes \
-    --train-output-dir /path/DrivePI_Data/unilion_bev_feats_train \
-    --val-output-dir /path/DrivePI_Data/unilion_bev_feats_val \
-    --dtype float16
+    projects/configs/unilion_swin_384_seq_e2e_lidar.py \
+    /home/renault/repo/UniLION/work_dirs/unilion_swin_384_det_map_lidar/epoch_1.pth \
+    --data-root /home/renault/repo/dataset/nuscenes \
+    --train-output-dir /home/renault/repo/dataset/nuscenes/unilion_bev_feats_train \
+    --val-output-dir /home/renault/repo/dataset/nuscenes/unilion_bev_feats_val \
+    --dtype float16 \
+    --modality lidar
 ```
 
-Each output directory contains one `<sample_token>.pt` file per sample and a
-`manifest.jsonl` index. Each `.pt` file contains a `feature` tensor in `C,H,W`
-layout and metadata for its nuScenes sample token, scene, timestamp, BEV
-coordinate bounds, and dtype. The default `float16` output reduces storage;
-use `--dtype float32` if the downstream project requires full precision. The
-checkpoint must be a complete UniLION model checkpoint; no training command is
-needed.
+Each output directory contains one `<sample_token>.npz` file per sample and a
+`manifest.jsonl` index. Each `.npz` file holds a single `data` array of shape
+`(1, C, H, W)`, the format read by DrivePI (`np.load(path)['data'][0]`). The
+manifest stores the per-sample metadata: nuScenes sample token, scene,
+timestamp, BEV coordinate bounds, and dtype. Files are written with
+`np.savez_compressed` (about 8 MB instead of 25 MB per `float16` sample);
+pass `--no-compress` for faster, larger files. The default `float16` output
+reduces storage; use `--dtype float32` if the downstream project requires full
+precision. The checkpoint must be a complete UniLION model checkpoint; no
+training command is needed.
+
+Check that a feature folder covers every sample of a LLaVA-style annotation
+file (exit code 1 and the list of missing tokens otherwise):
+
+```shell script
+python tools/check_bev_features.py \
+    /path/LiDAR-LLM-Nu-Caption/train_llava.json \
+    /path/DrivePI_Data/unilion_bev_feats_train
+```
 
 The vendored Mamba implementation requires the `causal-conv1d` 1.4.0 CUDA
 extension API. The v1.1.1 extension has an incompatible function signature.

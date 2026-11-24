@@ -46,7 +46,11 @@ data = dict(
     ),
 )
 
+#load_from = (
+#    'work_dirs/unilion_swin_384_seq_perception_lidar/iter_42192.pth'
+#)
+
 load_from = (
-    'work_dirs/unilion_swin_384_seq_perception_lidar/iter_42192.pth'
+    '/home/renault/repo/UniLION/work_dirs/unilion_swin_384_det_map_lidar/epoch_1.pth'
 )
 resume_from = None
